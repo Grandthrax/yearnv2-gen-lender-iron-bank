@@ -7,11 +7,11 @@ import "./WantToEthOracle/IWantToEth.sol";
 
 import "@yearnvaults/contracts/BaseStrategy.sol";
 
-import "@openzeppelinV3/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelinV3/contracts/math/SafeMath.sol";
-import "@openzeppelinV3/contracts/math/Math.sol";
-import "@openzeppelinV3/contracts/utils/Address.sol";
-import "@openzeppelinV3/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/math/Math.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 interface IUni{
     function getAmountsOut(
@@ -56,8 +56,8 @@ contract Strategy is BaseStrategy {
         wantToEthOracle = _oracle;
     }
 
-    function name() external pure override returns (string memory) {
-        return "StrategyLenderYieldOptimiser";
+    function name() external view override returns (string memory) {
+        return "StrategyLenderYieldOptimiserIB";
     }
 
     //management functions
@@ -478,27 +478,23 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    function exitPosition(uint256 _debtOutstanding) internal override returns ( uint256 _profit, uint256 _loss, uint256 _debtPayment) {
-        return prepareReturn(_debtOutstanding);
-    }
-
     /*
      * Liquidate as many assets as possible to `want`, irregardless of slippage,
      * up to `_amountNeeded`. Any excess should be re-invested here as well.
      */
-    function liquidatePosition(uint256 _amountNeeded) internal override returns (uint256 _amountFreed) {
+    function liquidatePosition(uint256 _amountNeeded) internal override returns (uint256 _amountFreed, uint256 _loss) {
         uint256 _balance = want.balanceOf(address(this));
 
         if (_balance >= _amountNeeded) {
             //if we don't set reserve here withdrawer will be sent our full balance
-            return _amountNeeded;
+            return (_amountNeeded,0);
         } else {
             uint256 received = _withdrawSome(_amountNeeded - _balance).add(_balance);
             if (received >= _amountNeeded) {
-                return _amountNeeded;
+                return (_amountNeeded,0);
             } else {
                
-                return received;
+                return (received,0);
             }
         }
     }

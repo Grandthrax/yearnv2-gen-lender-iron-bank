@@ -6,23 +6,27 @@ import brownie
 
 def test_apr_weth(weth,Strategy, chain,rewards, whale,gov,strategist,rando,Vault, interface,AlphaHomo, EthCream, EthCompound):
     crETH = interface.CEtherI('0xD06527D5e56A3495252A528C4987003b712860eE')
-    vault = gov.deploy(Vault, weth, gov, rewards, "", "")
+    vault = gov.deploy(Vault)
+    vault.initialize(weth, gov, rewards, "", "", gov)
+    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
+    #vault.setManagement(gov, {"from": gov})
 
     weth.approve(vault, 2 ** 256 - 1, {"from": whale} )
 
     strategy = strategist.deploy(Strategy, vault)
 
     ethCreamPlugin = strategist.deploy(EthCream, strategy, "Cream")
-    strategy.addLender(ethCreamPlugin, {"from": strategist})
+    strategy.addLender(ethCreamPlugin, {"from": gov})
 
 
     compoundPlugin = strategist.deploy(EthCompound, strategy, "Compound")
-    strategy.addLender(compoundPlugin, {"from": strategist})
+    strategy.addLender(compoundPlugin, {"from": gov})
 
     #assert strategy.numLenders() == 2
 
-    deposit_limit = 1_000_000_000 *1e18
-    vault.addStrategy(strategy, deposit_limit, deposit_limit, 500, {"from": gov})
+    rate_limit = 1_000_000_000 *1e18
+    debt_ratio = 9_000
+    vault.addStrategy(strategy, debt_ratio, rate_limit, 1000, {"from": gov})
 
     whale_deposit  = 1000 *1e18
     vault.deposit(whale_deposit, {"from": whale})

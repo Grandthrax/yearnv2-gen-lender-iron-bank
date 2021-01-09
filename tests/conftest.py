@@ -121,7 +121,8 @@ def shared_setup(module_isolation):
 @pytest.fixture
 def vault(gov, rewards, guardian, currency, pm):
     Vault = pm(config["dependencies"][0]).Vault
-    vault = guardian.deploy(Vault, currency, gov, rewards, "", "")
+    vault = guardian.deploy(Vault)
+    vault.initialize(currency, gov, rewards, "", "", guardian)
     yield vault
 
 @pytest.fixture
