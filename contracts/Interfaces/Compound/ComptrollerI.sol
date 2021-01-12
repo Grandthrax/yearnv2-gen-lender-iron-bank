@@ -2,9 +2,12 @@ pragma solidity >=0.5.0;
 pragma experimental ABIEncoderV2;
 
 import "./CTokenI.sol";
+import "./PriceOracle.sol";
 
 interface ComptrollerI {
     function enterMarkets(address[] calldata cTokens) external returns (uint256[] memory);
+    
+    function oracle() external view returns (PriceOracle);
 
     function exitMarket(address cToken) external returns (uint256);
 

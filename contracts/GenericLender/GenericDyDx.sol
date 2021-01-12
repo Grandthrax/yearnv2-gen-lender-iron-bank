@@ -25,7 +25,7 @@ contract GenericDyDx is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 private constant secondPerYear = 31_153_900; //todo
+    uint256 private constant secondsPerBlock = 12;
     address private constant SOLO = 0x1E0447b19BB6EcFdAe1e4AE1694b0C3659614e4e;
     uint256 public dydxMarketId;
 
@@ -178,7 +178,7 @@ contract GenericDyDx is GenericLenderBase {
 
         uint256 borrowInterestRate = IInterestSetter(interestSetter).getInterestRate(address(want), borrow, supply).value;
         uint256 lendInterestRate = borrowInterestRate.mul(borrow).div(supply);
-        return lendInterestRate.mul(secondPerYear);
+        return lendInterestRate.mul(secondsPerBlock);
     }
 
     function protectedTokens() internal view override returns (address[] memory) {

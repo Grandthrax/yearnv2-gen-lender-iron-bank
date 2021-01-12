@@ -14,8 +14,10 @@ def test_withdrawals_weth_work(currency,interface, chain, whale,gov,strategist,r
     currency.approve(vault, 2 ** 256 - 1, {"from": whale} )
     currency.approve(vault, 2 ** 256 - 1, {"from": strategist} )
     
-    deposit_limit = 1_000_000_000 *(10 ** (decimals))
-    vault.addStrategy(strategy, deposit_limit, deposit_limit, 500, {"from": gov})
+    rate_limit = 1_000_000_000 *1e18
+    
+    debt_ratio = 10_000 #100%
+    vault.addStrategy(strategy, debt_ratio, rate_limit, 1000, {"from": gov})
 
     status = strategy.lendStatuses()
     depositAmount =  5 * (10 ** (decimals))
@@ -64,7 +66,7 @@ def test_withdrawals_weth_work(currency,interface, chain, whale,gov,strategist,r
     for j in status:
         plugin = interface.IGeneric(j[3])
         print('Testing ', j[0])
-        strategy.addLender(j[3])
+        strategy.addLender(j[3], {'from': gov})
         strategy.harvest({"from": strategist})
 
         assert plugin.nav() > (depositAmount + whale_deposit)*.999

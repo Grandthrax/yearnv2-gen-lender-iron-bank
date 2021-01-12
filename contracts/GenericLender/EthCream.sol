@@ -24,7 +24,6 @@ contract EthCream is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 private constant blocksPerYear = 2_300_000;
     IWETH public constant weth = IWETH(address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     CEtherI public constant crETH = CEtherI(address(0xD06527D5e56A3495252A528C4987003b712860eE));
 
@@ -58,7 +57,7 @@ contract EthCream is GenericLenderBase {
     }
 
     function _apr() internal view returns (uint256) {
-        return crETH.supplyRatePerBlock().mul(blocksPerYear);
+        return crETH.supplyRatePerBlock();
     }
 
     function weightedApr() external view override returns (uint256) {
@@ -160,7 +159,7 @@ contract EthCream is GenericLenderBase {
         //the supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
         uint256 supplyRate = model.getSupplyRate(cashPrior.add(amount), borrows, reserves, reserverFactor);
 
-        return supplyRate.mul(blocksPerYear);
+        return supplyRate;
     }
 
     function protectedTokens() internal view override returns (address[] memory) {

@@ -26,7 +26,6 @@ contract EthCompound is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 private constant blocksPerYear = 2_300_000;
     IWETH public constant weth = IWETH(address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     CEtherI public constant crETH = CEtherI(address(0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5));
     address public constant comp = address(0xc00e94Cb662C3520282E6f5717214004A7f26888);
@@ -64,7 +63,7 @@ contract EthCompound is GenericLenderBase {
     }
 
     function _apr() internal view returns (uint256) {
-        return crETH.supplyRatePerBlock().mul(blocksPerYear);
+        return crETH.supplyRatePerBlock();
     }
 
     function weightedApr() external view override returns (uint256) {
@@ -184,13 +183,13 @@ contract EthCompound is GenericLenderBase {
         InterestRateModel model = crETH.interestRateModel();
 
         //the supply rate is derived from the borrow rate, reserve factor and the amount of total borrows.
-        (, uint256 borrowRate) = model.getBorrowRate(cashPrior.add(amount), borrows, reserves);
+        uint256 borrowRate = model.getBorrowRate(cashPrior.add(amount), borrows, reserves);
 
         uint256 borrowsPer = uint256(1e18).mul(borrows).div(underlying);
 
         uint256 supplyRate = borrowRate.mul(uint256(1e18).sub(reserverFactor)).mul(borrowsPer).div(1e18).div(1e18);
 
-        return supplyRate.mul(blocksPerYear);
+        return supplyRate;
     }
 
     function protectedTokens() internal view override returns (address[] memory) {

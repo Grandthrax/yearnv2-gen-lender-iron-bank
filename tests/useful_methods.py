@@ -11,11 +11,23 @@ def genericStateOfStrat(strategy, currency, vault):
     strState = vault.strategies(strategy)
     totalDebt = strState[5]/  (10 ** decimals)
     debtLimit = strState[2]/  (10 ** decimals)
+    esassets =strategy.estimatedTotalAssets()+1
 
     totalReturns = strState[6]/  (10 ** decimals)
     print(f"Total Strategy Debt: {totalDebt:.5f}")
     print(f"Strategy Debt Limit: {debtLimit:.5f}")
     print(f"Total Strategy Returns: {totalReturns:.5f}")
+    blocksPerYear = 2628333
+    ironapr = strategy.ironBankBorrowRate(0, True)*blocksPerYear/1e18
+
+    apr= strategy.currentSupplyRate()*blocksPerYear/1e18
+    irondebt = strategy.ironBankOutstandingDebtStored()
+    leverage = (irondebt*(apr-ironapr) + esassets*apr)/esassets
+
+    print('Iron Bank Debt:', irondebt/  (10 ** decimals))  
+    print('Basic APR:', "{:.2%}".format(apr))
+    print('Iron APR:',ironapr)
+    print('Full APR:',leverage)
     print("Harvest Trigger:", strategy.harvestTrigger(1000000 * 30 * 1e9))
     print(
         "Tend Trigger:", strategy.tendTrigger(1000000 * 30 * 1e9)

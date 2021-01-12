@@ -24,7 +24,7 @@ contract AlphaHomo is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 private constant secondsPerYear = 31556952;
+    uint256 private constant secondsPerBlock = 12;
     address public constant weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
     address public constant bank = address(0x67B66C99D3Eb37Fa76Aa3Ed1ff33E8e39F0b9c7A);
 
@@ -98,7 +98,12 @@ contract AlphaHomo is GenericLenderBase {
         uint256 balance = bank.balance.add(amount);
         uint256 ratePerSec = config.getInterestRate(b.glbDebtVal(), balance);
 
-        return ratePerSec.mul(secondsPerYear);
+        uint256 utilisation = uint256(1e18).mul(b.glbDebtVal()).div(b.totalETH());
+
+        //10% is kept as reserves. So remove. Then multiply by utilisation to share per lender
+        uint256 rate = ratePerSec.mul(9).div(10).mul(utilisation).div(1e18);
+
+        return rate.mul(secondsPerBlock);
     }
 
     function weightedApr() external view override returns (uint256) {

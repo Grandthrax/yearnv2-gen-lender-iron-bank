@@ -61,6 +61,7 @@ def live_dydxweth(GenericDyDx):
     yield GenericDyDx.at('0x1F2699B3aaf3F04b61B99B776b4a21a08502AE73')
 
 
+
 @pytest.fixture
 def live_guest_list(pm):
     TestGuestList = pm(config["dependencies"][0]).TestGuestList
@@ -158,6 +159,17 @@ def cUsdc(interface):
 def crUsdc(interface):
     yield interface.CErc20I('0x44fbeBd2F576670a6C33f6Fc0B00aA8c5753b322')
 
+@pytest.fixture
+def ironWeth(interface):
+    yield interface.CErc20I('0x41c84c0e2EE0b740Cf0d31F63f3B6F627DC6b393')
+
+@pytest.fixture
+def ironbank(interface):
+    yield interface.IronBankControllerI('0xAB1c342C7bf5Ec5F02ADEA1c2270670bCa144CbB')
+@pytest.fixture
+def creamdev(accounts):
+    yield accounts.at('0x6D5a7597896A703Fe8c85775B23395a48f971305', force=True)
+
 
 #@pytest.fixture(autouse=True)
 #def isolation(fn_isolation):
@@ -169,7 +181,9 @@ def shared_setup(module_isolation):
 @pytest.fixture
 def vault(gov, rewards, guardian, currency, pm):
     Vault = pm(config["dependencies"][0]).Vault
-    vault = guardian.deploy(Vault, currency, gov, rewards, "", "")
+    vault = gov.deploy(Vault)
+    vault.initialize(currency, gov, rewards, "", "", guardian)
+    vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
     yield vault
 
 @pytest.fixture
@@ -177,21 +191,46 @@ def Vault(pm):
     yield pm(config["dependencies"][0]).Vault
 
 @pytest.fixture
-def strategy(strategist, keeper, vault,crUsdc,cUsdc,  Strategy,EthCream, AlphaHomo,EthCompound, GenericDyDx):
-    strategy = strategist.deploy(Strategy, vault)
+def strategy(strategist, keeper, vault,crUsdc,cUsdc, ironWeth, gov, Strategy,EthCream, AlphaHomo,EthCompound, GenericDyDx):
+    strategy = strategist.deploy(Strategy, vault, ironWeth)
     strategy.setKeeper(keeper)
 
     ethCreamPlugin = strategist.deploy(EthCream, strategy, "Cream")
-    strategy.addLender(ethCreamPlugin, {"from": strategist})
+    strategy.addLender(ethCreamPlugin, {"from": gov})
 
     alphaHomoPlugin = strategist.deploy(AlphaHomo, strategy, "Alpha Homo")
-    strategy.addLender(alphaHomoPlugin, {"from": strategist})
+    strategy.addLender(alphaHomoPlugin, {"from": gov})
 
     compoundPlugin = strategist.deploy(EthCompound, strategy, "Compound")
-    strategy.addLender(compoundPlugin, {"from": strategist})
+    strategy.addLender(compoundPlugin, {"from": gov})
 
     dydxPlugin = strategist.deploy(GenericDyDx, strategy, "DyDx")
-    strategy.addLender(dydxPlugin, {"from": strategist})
+    strategy.addLender(dydxPlugin, {"from": gov})
 
     assert strategy.numLenders() == 4
+    yield strategy
+
+@pytest.fixture()
+def smallrunningstrategy(gov, strategy,ironbank, currency,creamdev, ironWeth, vault, whale):
+    rate_limit = 1_000_000_000 *1e18
+    
+    debt_ratio = 10_000 #100%
+    vault.addStrategy(strategy, debt_ratio, rate_limit, 1000, {"from": gov})
+    
+    ironbank._setCreditLimit(strategy, 1_000_000 *1e18, {'from': creamdev})
+
+    currency.approve(vault, 2 ** 256 - 1, {"from": whale} )
+
+    amount = Wei('100 ether')
+    dai.approve(vault, amount, {'from': whale})
+    vault.deposit(amount, {'from': whale})    
+
+    strategy.harvest({'from': gov})
+    
+    #do it again with a smaller amount to replicate being this full for a while
+    amount = Wei('10 ether')
+    dai.approve(vault, amount, {'from': whale})
+    vault.deposit(amount, {'from': whale})   
+    strategy.harvest({'from': gov})
+    
     yield strategy

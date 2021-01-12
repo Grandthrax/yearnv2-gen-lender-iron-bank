@@ -7,6 +7,9 @@ import "./WantToEthOracle/IWantToEth.sol";
 
 import "@yearnvaults/contracts/BaseStrategy.sol";
 
+import "./Interfaces/Compound/CErc20I.sol";
+import "./Interfaces/Compound/ComptrollerI.sol";
+
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/math/Math.sol";
@@ -40,16 +43,166 @@ contract Strategy is BaseStrategy {
     address public constant uniswapRouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
     address public constant weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
+    uint256 public constant BLOCKSPERYEAR = 2628333; // 12 seconds per block
+
+    //IRON BANK
+    ComptrollerI private ironBank = ComptrollerI(address(0xAB1c342C7bf5Ec5F02ADEA1c2270670bCa144CbB));
+    CErc20I private ironBankToken;
+    uint256 public maxIronBankLeverage = 4; //max leverage we will take from iron bank
+    uint256 public step = 10;
+
     IGenericLender[] public lenders;
     bool public externalOracle = false;
     address public wantToEthOracle;
 
-    constructor(address _vault) public BaseStrategy(_vault) {
+    constructor(address _vault, address _ironBankToken) public BaseStrategy(_vault) {
+        ironBankToken = CErc20I(_ironBankToken);
 
         debtThreshold = 1000;
+        want.safeApprove(address(ironBankToken), uint256(-1));
 
         //we do this horrible thing because you can't compare strings in solidity
         require(keccak256(bytes(apiVersion())) == keccak256(bytes(VaultAPI(_vault).apiVersion())), "WRONG VERSION");
+    }
+
+
+
+    /*****************
+     * Iron Bank
+     ******************/
+
+    //simple logic. do we get more apr than iron bank charges?
+    //if so, is that still true with increased pos?
+    //if not, should be reduce?
+    //made harder because we can't assume iron bank debt curve. So need to increment
+    function internalCreditOfficer() public view returns (bool borrowMore, uint256 amount) {
+
+        if(emergencyExit){
+            return(false, ironBankOutstandingDebtStored());
+        }
+
+        //how much credit we have
+        (, uint256 liquidity, uint256 shortfall) = ironBank.getAccountLiquidity(address(this));
+        uint256 underlyingPrice = ironBank.oracle().getUnderlyingPrice(address(ironBankToken));
+        
+        if(underlyingPrice == 0){
+            return (false, 0);
+        }
+
+        liquidity = liquidity.mul(1e18).div(underlyingPrice);
+        shortfall = shortfall.mul(1e18).div(underlyingPrice);
+
+        //repay debt if iron bank wants its money back
+        if(shortfall > 0){
+            //note we only borrow 1 asset so can assume all our shortfall is from it
+            return(false, shortfall-1); //remove 1 incase of rounding errors
+        }
+        
+
+        uint256 liquidityAvailable = want.balanceOf(address(ironBankToken));
+        uint256 remainingCredit = Math.min(liquidity, liquidityAvailable);
+
+        
+        //our current supply rate.
+        //we only calculate once because it is expensive
+        uint256 currentSR = currentSupplyRate();
+        //iron bank borrow rate
+        uint256 ironBankBR = ironBankBorrowRate(0, true);
+
+        uint256 outstandingDebt = ironBankOutstandingDebtStored();
+
+        //we have internal credit limit. it is function on our own assets invested
+        //this means we can always repay our debt from our capital
+        uint256 maxCreditDesired = vault.strategies(address(this)).totalDebt.mul(maxIronBankLeverage);
+
+
+        //minIncrement must be > 0
+        if(maxCreditDesired <= step){
+            return (false, 0);
+        }
+
+        //we move in 10% increments
+        uint256 minIncrement = maxCreditDesired.div(step);
+
+        //we start at 1 to save some gas
+        uint256 increment = 1;
+  
+        // if we have too much debt we return
+        //overshoot incase of dust
+        if(maxCreditDesired.mul(11).div(10) < outstandingDebt){
+            borrowMore = false;
+            amount = outstandingDebt - maxCreditDesired;
+        }
+        //if sr is > iron bank we borrow more. else return
+        else if(currentSR > ironBankBR){            
+            remainingCredit = Math.min(maxCreditDesired - outstandingDebt, remainingCredit);
+
+            while(minIncrement.mul(increment) <= remainingCredit){
+                ironBankBR = ironBankBorrowRate(minIncrement.mul(increment), false);
+                if(currentSR <= ironBankBR){
+                    break;
+                }
+
+                increment++;
+            }
+            borrowMore = true;
+            amount = minIncrement.mul(increment-1);
+
+        }else{
+
+            while(minIncrement.mul(increment) <= outstandingDebt){
+                ironBankBR = ironBankBorrowRate(minIncrement.mul(increment), true);
+
+                //we do increment before the if statement here
+                increment++;
+                if(currentSR > ironBankBR){
+                    break;
+                }
+
+            }
+            borrowMore = false;
+
+            //special case to repay all
+            if(increment == 1){
+                amount = outstandingDebt;
+            }else{
+                amount = minIncrement.mul(increment - 1);
+            }
+
+        }
+
+        //we dont play with dust:
+        if (amount < debtThreshold) { 
+            amount = 0;
+        }
+     }
+
+     function ironBankOutstandingDebtStored() public view returns (uint256 available) {
+
+        return ironBankToken.borrowBalanceStored(address(this));
+     }
+
+
+     function ironBankBorrowRate(uint256 amount, bool repay) public view returns (uint256) {
+        uint256 cashPrior = want.balanceOf(address(ironBankToken));
+
+        uint256 borrows = ironBankToken.totalBorrows();
+        uint256 reserves = ironBankToken.totalReserves();
+
+        InterestRateModel model = ironBankToken.interestRateModel();
+        uint256 cashChange;
+        uint256 borrowChange;
+        if(repay){
+            cashChange = cashPrior.add(amount);
+            borrowChange = borrows.sub(amount);
+        }else{
+            cashChange = cashPrior.sub(amount);
+            borrowChange = borrows.add(amount);
+        }
+
+        uint256 borrowRate = model.getBorrowRate(cashChange, borrowChange, reserves);
+
+        return borrowRate;
     }
 
     function setPriceOracle(address _oracle) external onlyAuthorized{
@@ -127,7 +280,7 @@ contract Strategy is BaseStrategy {
             s.name = lenders[i].lenderName();
             s.add = address(lenders[i]);
             s.assets = lenders[i].nav();
-            s.rate = lenders[i].apr();
+            s.rate = lenders[i].apr().mul(BLOCKSPERYEAR);
             statuses[i] = s;
         }
 
@@ -139,7 +292,10 @@ contract Strategy is BaseStrategy {
         uint256 nav = lentTotalAssets();
         nav += want.balanceOf(address(this));
 
-        return nav;
+        uint256 ironBankDebt = ironBankOutstandingDebtStored();
+        if(ironBankDebt > nav) return 0;
+
+        return nav.sub(ironBankDebt);
     }
 
     function numLenders() public view returns (uint256) {
@@ -148,11 +304,10 @@ contract Strategy is BaseStrategy {
 
 
     //the weighted apr of all lenders. sum(nav * apr)/totalNav
-    function estimatedAPR() public view returns (uint256) {
-        uint256 bal = estimatedTotalAssets();
-        if (bal == 0) {
-            return 0;
-        }
+    function currentSupplyRate() public view returns (uint256) {
+        uint256 bal = lentTotalAssets();
+        bal += want.balanceOf(address(this));
+
 
         uint256 weightedAPR = 0;
 
@@ -161,6 +316,23 @@ contract Strategy is BaseStrategy {
         }
 
         return weightedAPR.div(bal);
+    }
+    function estimatedAPR() public view returns (uint256){
+        uint256 outstandingDebt = ironBankOutstandingDebtStored();
+        uint256 ironBankBR = ironBankBorrowRate(0, true);
+        uint256 id = outstandingDebt.mul(ironBankBR);
+
+        uint256 currentSR = currentSupplyRate();
+        uint256 assets = lentTotalAssets().add(want.balanceOf(address(this)));
+        uint256 ti = assets.mul(currentSR);
+        if(ti > id && assets > outstandingDebt){
+            return ti.sub(id).div(assets.sub(outstandingDebt)).mul(BLOCKSPERYEAR);
+        }else{
+            return 0;
+        }
+
+        
+
     }
 
     //Estimates the impact on APR if we add more money. It does not take into account adjusting position
@@ -313,8 +485,15 @@ contract Strategy is BaseStrategy {
         uint256 lentAssets = lentTotalAssets();
 
         uint256 looseAssets = want.balanceOf(address(this));
-
+        uint256 ironBankDebt = ironBankOutstandingDebtStored();
         uint256 total = looseAssets.add(lentAssets);
+        if(ironBankDebt < total){
+            total = total.sub(ironBankDebt);
+        }else{
+            total = 0;
+        }
+
+        
 
         if (lentAssets == 0) {
             //no position to harvest or profit to report
@@ -382,16 +561,35 @@ contract Strategy is BaseStrategy {
      *   we ignore debt outstanding for an easy life
      */
     function adjustPosition(uint256 _debtOutstanding) internal override {
+
+        //start off by borrowing or returning:
+        (bool borrowMore, uint256 amount) = internalCreditOfficer();
+        
+        //do iron bank stuff first
+        if(!borrowMore){
+            (uint256 _amountFreed,) = liquidatePosition(amount);
+            //withdraw and repay
+            ironBankToken.repayBorrow(_amountFreed);
+            
+        }else if(amount > 0){
+            //borrow the amount we want
+            ironBankToken.borrow(amount);
+        }
+        
+        //emergency exit is dealt with at beginning of harvest
+        if (emergencyExit) {
+            return;
+        }
+
+
+
         //we just keep all money in want if we dont have any lenders
         if(lenders.length == 0){
            return;
         }
 
         _debtOutstanding; //ignored. we handle it in prepare return
-        //emergency exit is dealt with at beginning of harvest
-        if (emergencyExit) {
-            return;
-        }
+
 
         (uint256 lowest, uint256 lowestApr, uint256 highest, uint256 potential) = estimateAdjustPosition();
 
@@ -540,6 +738,13 @@ contract Strategy is BaseStrategy {
         if (harvestTrigger(callCost)) {
             return false;
         }
+        uint256 wantCallCost = _callCostToWant(callCost);
+
+        //test if we want to change iron bank position
+        (,uint256 _amount)= internalCreditOfficer();
+        if(profitFactor.mul(wantCallCost) < _amount){
+            return true;
+        }
 
         //now let's check if there is better apr somewhere else.
         //If there is and profit potential is worth changing then lets do it
@@ -552,9 +757,9 @@ contract Strategy is BaseStrategy {
             //profit increase is 1 days profit with new apr
             uint256 profitIncrease = (nav.mul(potential) - nav.mul(lowestApr)).div(1e18).div(365);
 
-            uint256 wantCallCost = _callCostToWant(callCost);
+            
 
-            return (wantCallCost * callCost < profitIncrease);
+            return (wantCallCost.mul(profitFactor) < profitIncrease);
         }
     }
 
@@ -563,7 +768,12 @@ contract Strategy is BaseStrategy {
      */
     function prepareMigration(address _newStrategy) internal override {
         uint256 outstanding = vault.strategies(address(this)).totalDebt;
-        (,uint loss, uint wantBalance) = prepareReturn(outstanding);
+        uint256 ibBorrows = ironBankToken.borrowBalanceCurrent(address(this));
+        (,uint loss, uint wantBalance) = prepareReturn(outstanding.add(ibBorrows));
+
+
+        ironBankToken.repayBorrow(Math.min(ibBorrows, wantBalance));
+        wantBalance = want.balanceOf(address(this));
 
         require(wantBalance.add(loss) >= outstanding, "LIQUIDITY LOCKED");
         want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
