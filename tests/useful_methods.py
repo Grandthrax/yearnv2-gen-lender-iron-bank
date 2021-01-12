@@ -26,8 +26,8 @@ def genericStateOfStrat(strategy, currency, vault):
 
     print('Iron Bank Debt:', irondebt/  (10 ** decimals))  
     print('Basic APR:', "{:.2%}".format(apr))
-    print('Iron APR:',ironapr)
-    print('Full APR:',leverage)
+    print('Iron APR:',"{:.2%}".format(ironapr))
+    print('Full APR:',"{:.2%}".format(leverage))
     print("Harvest Trigger:", strategy.harvestTrigger(1000000 * 30 * 1e9))
     print(
         "Tend Trigger:", strategy.tendTrigger(1000000 * 30 * 1e9)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.6.12;
+pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 import "./GenericLender/IGenericLender.sol";
@@ -26,8 +26,9 @@ interface IUni{
 /********************
  *
  *   A lender optimisation strategy for any erc20 asset
+ *   Using iron bank to leverage up
  *   https://github.com/Grandthrax/yearnV2-generic-lender-strat
- *   v0.2.2
+ *   v0.3.0
  *
  *   This strategy works by taking plugins designed for standard lending platforms
  *   It automatically chooses the best yield generating platform and adjusts accordingly
@@ -769,14 +770,15 @@ contract Strategy is BaseStrategy {
     function prepareMigration(address _newStrategy) internal override {
         uint256 outstanding = vault.strategies(address(this)).totalDebt;
         uint256 ibBorrows = ironBankToken.borrowBalanceCurrent(address(this));
-        (,uint loss, uint wantBalance) = prepareReturn(outstanding.add(ibBorrows));
+        (,, uint wantBalance) = prepareReturn(outstanding.add(ibBorrows));
 
 
         ironBankToken.repayBorrow(Math.min(ibBorrows, wantBalance));
         wantBalance = want.balanceOf(address(this));
 
-        require(wantBalance.add(loss) >= outstanding, "LIQUIDITY LOCKED");
-        want.safeTransfer(_newStrategy, want.balanceOf(address(this)));
+       // require(wantBalance.add(loss) >= outstanding, "LIQUIDITY LOCKED");
+       //require removed because in 0.3.0 we can still harvest after migrate
+       
     }
 
 

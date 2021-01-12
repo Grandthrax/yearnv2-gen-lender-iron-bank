@@ -1,5 +1,5 @@
 
-pragma solidity ^0.6.0;
+pragma solidity 0.6.0;
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -78,7 +78,7 @@ interface IERC20 {
 
 
 
-pragma solidity ^0.6.0;
+pragma solidity 0.6.0;
 
 /**
  * @dev Wrappers over Solidity's arithmetic operations with added overflow
@@ -236,7 +236,7 @@ library SafeMath {
     }
 }
 
-pragma solidity ^0.6.2;
+pragma solidity 0.6.2;
 
 /**
  * @dev Collection of functions related to the address type
@@ -477,7 +477,7 @@ interface IGenericLender {
 
 }
 
-pragma solidity ^0.6.0;
+pragma solidity 0.6.0;
 
 /**
  * @dev Standard math utilities missing in the Solidity language.
@@ -1195,7 +1195,7 @@ interface IWantToEth {
 }
 
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.6.12;
+pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 interface IUni{
