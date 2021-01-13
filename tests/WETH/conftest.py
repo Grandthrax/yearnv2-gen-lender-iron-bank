@@ -222,14 +222,12 @@ def smallrunningstrategy(gov, strategy,ironbank, currency,creamdev, ironWeth, va
     currency.approve(vault, 2 ** 256 - 1, {"from": whale} )
 
     amount = Wei('100 ether')
-    dai.approve(vault, amount, {'from': whale})
     vault.deposit(amount, {'from': whale})    
 
     strategy.harvest({'from': gov})
     
     #do it again with a smaller amount to replicate being this full for a while
     amount = Wei('10 ether')
-    dai.approve(vault, amount, {'from': whale})
     vault.deposit(amount, {'from': whale})   
     strategy.harvest({'from': gov})
     

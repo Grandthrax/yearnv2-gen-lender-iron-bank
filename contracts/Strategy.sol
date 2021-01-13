@@ -59,7 +59,7 @@ contract Strategy is BaseStrategy {
     constructor(address _vault, address _ironBankToken) public BaseStrategy(_vault) {
         ironBankToken = CErc20I(_ironBankToken);
 
-        debtThreshold = 1000;
+        debtThreshold = 1e15;
         want.safeApprove(address(ironBankToken), uint256(-1));
 
         //we do this horrible thing because you can't compare strings in solidity
@@ -778,7 +778,7 @@ contract Strategy is BaseStrategy {
 
        // require(wantBalance.add(loss) >= outstanding, "LIQUIDITY LOCKED");
        //require removed because in 0.3.0 we can still harvest after migrate
-       
+
     }
 
 
