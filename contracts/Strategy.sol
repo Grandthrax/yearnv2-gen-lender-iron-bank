@@ -18,7 +18,7 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 interface IUni{
     function getAmountsOut(
-        uint256 amountIn, 
+        uint256 amountIn,
         address[] calldata path
     ) external view returns (uint256[] memory amounts);
 }
@@ -57,13 +57,13 @@ contract Strategy is BaseStrategy {
     address public wantToEthOracle;
 
     constructor(address _vault, address _ironBankToken) public BaseStrategy(_vault) {
-        ironBankToken = CErc20I(_ironBankToken);
+        //ironBankToken = CErc20I(_ironBankToken);
 
-        debtThreshold = 1e15;
-        want.safeApprove(address(ironBankToken), uint256(-1));
+        //debtThreshold = 1e15;
+        //want.safeApprove(address(ironBankToken), uint256(-1));
 
         //we do this horrible thing because you can't compare strings in solidity
-        require(keccak256(bytes(apiVersion())) == keccak256(bytes(VaultAPI(_vault).apiVersion())), "WRONG VERSION");
+        //require(keccak256(bytes(apiVersion())) == keccak256(bytes(VaultAPI(_vault).apiVersion())), "WRONG VERSION");
     }
 
 
@@ -85,7 +85,7 @@ contract Strategy is BaseStrategy {
         //how much credit we have
         (, uint256 liquidity, uint256 shortfall) = ironBank.getAccountLiquidity(address(this));
         uint256 underlyingPrice = ironBank.oracle().getUnderlyingPrice(address(ironBankToken));
-        
+
         if(underlyingPrice == 0){
             return (false, 0);
         }
@@ -98,12 +98,12 @@ contract Strategy is BaseStrategy {
             //note we only borrow 1 asset so can assume all our shortfall is from it
             return(false, shortfall-1); //remove 1 incase of rounding errors
         }
-        
+
 
         uint256 liquidityAvailable = want.balanceOf(address(ironBankToken));
         uint256 remainingCredit = Math.min(liquidity, liquidityAvailable);
 
-        
+
         //our current supply rate.
         //we only calculate once because it is expensive
         uint256 currentSR = currentSupplyRate();
@@ -127,7 +127,7 @@ contract Strategy is BaseStrategy {
 
         //we start at 1 to save some gas
         uint256 increment = 1;
-  
+
         // if we have too much debt we return
         //overshoot incase of dust
         if(maxCreditDesired.mul(11).div(10) < outstandingDebt){
@@ -135,7 +135,7 @@ contract Strategy is BaseStrategy {
             amount = outstandingDebt - maxCreditDesired;
         }
         //if sr is > iron bank we borrow more. else return
-        else if(currentSR > ironBankBR){            
+        else if(currentSR > ironBankBR){
             remainingCredit = Math.min(maxCreditDesired - outstandingDebt, remainingCredit);
 
             while(minIncrement.mul(increment) <= remainingCredit){
@@ -173,7 +173,7 @@ contract Strategy is BaseStrategy {
         }
 
         //we dont play with dust:
-        if (amount < debtThreshold) { 
+        if (amount < debtThreshold) {
             amount = 0;
         }
      }
@@ -332,7 +332,7 @@ contract Strategy is BaseStrategy {
             return 0;
         }
 
-        
+
 
     }
 
@@ -494,7 +494,7 @@ contract Strategy is BaseStrategy {
             total = 0;
         }
 
-        
+
 
         if (lentAssets == 0) {
             //no position to harvest or profit to report
@@ -565,18 +565,18 @@ contract Strategy is BaseStrategy {
 
         //start off by borrowing or returning:
         (bool borrowMore, uint256 amount) = internalCreditOfficer();
-        
+
         //do iron bank stuff first
         if(!borrowMore){
             (uint256 _amountFreed,) = liquidatePosition(amount);
             //withdraw and repay
             ironBankToken.repayBorrow(_amountFreed);
-            
+
         }else if(amount > 0){
             //borrow the amount we want
             ironBankToken.borrow(amount);
         }
-        
+
         //emergency exit is dealt with at beginning of harvest
         if (emergencyExit) {
             return;
@@ -692,7 +692,7 @@ contract Strategy is BaseStrategy {
             if (received >= _amountNeeded) {
                 return (_amountNeeded,0);
             } else {
-               
+
                 return (received,0);
             }
         }
@@ -705,12 +705,12 @@ contract Strategy is BaseStrategy {
     }
 
     function ethToWant(uint256 _amount) internal view returns (uint256){
-       
+
         address[] memory path = new address[](2);
         path = new address[](2);
         path[0] = weth;
-        path[1] = address(want); 
- 
+        path[1] = address(want);
+
         uint256[] memory amounts = IUni(uniswapRouter).getAmountsOut(_amount, path);
 
         return amounts[amounts.length - 1];
@@ -758,7 +758,7 @@ contract Strategy is BaseStrategy {
             //profit increase is 1 days profit with new apr
             uint256 profitIncrease = (nav.mul(potential) - nav.mul(lowestApr)).div(1e18).div(365);
 
-            
+
 
             return (wantCallCost.mul(profitFactor) < profitIncrease);
         }
