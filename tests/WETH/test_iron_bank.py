@@ -4,7 +4,7 @@ from useful_methods import  genericStateOfVault,genericStateOfStrat
 import random
 import brownie
 
-def test_migrate(smallrunningstrategy, ironbank,AlphaHomo, ironWeth,Strategy, creamdev,gov, web3,  chain, vault,currency, whale, strategist):
+def test_limit_0(smallrunningstrategy, ironbank,AlphaHomo, ironWeth,Strategy, creamdev,gov, web3,  chain, vault,currency, whale, strategist):
     
     strategy = smallrunningstrategy
 
@@ -23,8 +23,9 @@ def test_migrate(smallrunningstrategy, ironbank,AlphaHomo, ironWeth,Strategy, cr
     #assert strategy.ironBankOutstandingDebtStored() == 0
     #strategy.harvest({'from': strategist})
     assert strategy.ironBankOutstandingDebtStored() > 0
+    ironbank._setCreditLimit(strategy2, 0, {'from': creamdev})
 
-    
+    strategy.harvest({'from': strategist})
 
     strategy2 = strategist.deploy(Strategy,vault, ironWeth)
     alphaHomoPlugin = strategist.deploy(AlphaHomo, strategy2, "Alpha Homo")

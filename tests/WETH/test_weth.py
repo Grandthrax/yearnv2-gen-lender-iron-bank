@@ -4,35 +4,41 @@ from useful_methods import  genericStateOfVault,genericStateOfStrat
 import random
 import brownie
 
-def test_apr_weth(weth,Strategy, chain,rewards, whale,ironWeth,gov,strategist,rando,Vault, interface,AlphaHomo, EthCream, EthCompound):
+def test_apr_weth(weth,Strategy,ironbank, creamdev, chain,rewards, whale,ironWeth,gov,strategist,rando,Vault, interface,AlphaHomo, EthCream, EthCompound):
+    
     crETH = interface.CEtherI('0xD06527D5e56A3495252A528C4987003b712860eE')
     vault = gov.deploy(Vault)
     vault.initialize(weth, gov, rewards, "", "", gov)
     vault.setDepositLimit(2 ** 256 - 1, {"from": gov})
-    #vault.setManagement(gov, {"from": gov})
+    currency = weth
+    vault.setManagementFee(0, {"from": gov})
 
     weth.approve(vault, 2 ** 256 - 1, {"from": whale} )
 
     strategy = strategist.deploy(Strategy, vault, ironWeth)
+    ironbank._setCreditLimit(strategy, 1_000_000 *1e18, {'from': creamdev})
 
     ethCreamPlugin = strategist.deploy(EthCream, strategy, "Cream")
     strategy.addLender(ethCreamPlugin, {"from": gov})
-
+    strategy.setDebtThreshold(0, {'from': strategist})
 
     compoundPlugin = strategist.deploy(EthCompound, strategy, "Compound")
     strategy.addLender(compoundPlugin, {"from": gov})
 
+    alphaHomoPlugin = strategist.deploy(AlphaHomo, strategy, "Alpha Homo")
+    strategy.addLender(alphaHomoPlugin, {"from": gov})
+
     #assert strategy.numLenders() == 2
 
     rate_limit = 1_000_000_000 *1e18
-    debt_ratio = 9_000
+    debt_ratio = 9_500
     vault.addStrategy(strategy, debt_ratio, rate_limit, 1000, {"from": gov})
 
-    whale_deposit  = 1000 *1e18
+    whale_deposit  = 100 *1e18
     vault.deposit(whale_deposit, {"from": whale})
     chain.sleep(10)
     chain.mine(1)
-    assert strategy.harvestTrigger(1*1e18) == True
+   # assert strategy.harvestTrigger(1*1e18) == True
     print(whale_deposit/1e18)
     print(ethCreamPlugin.aprAfterDeposit(0)/1e18)
     print(compoundPlugin.aprAfterDeposit(0)/1e18)
@@ -42,15 +48,20 @@ def test_apr_weth(weth,Strategy, chain,rewards, whale,ironWeth,gov,strategist,ra
     strategy.harvest({"from": strategist})
     startingBalance = vault.totalAssets()
     for i in range(10):
-        crETH.mint({"from": whale})
+
         waitBlock = 25
         #print(f'\n----wait {waitBlock} blocks----')
         chain.mine(waitBlock)
-        chain.sleep(waitBlock*13)
+        chain.sleep(waitBlock*15)
+        crETH.mint({"from": whale})
         #print(f'\n----harvest----')
+        ppsBefore = vault.pricePerShare()
         strategy.harvest({'from': strategist})
 
-        #genericStateOfStrat(strategy, currency, vault)
+
+
+        genericStateOfStrat(strategy, currency, vault)
+        ppsAfter = vault.pricePerShare()
         #genericStateOfVault(vault, currency)
 
 
@@ -58,18 +69,21 @@ def test_apr_weth(weth,Strategy, chain,rewards, whale,ironWeth,gov,strategist,ra
         strState = vault.strategies(strategy)
         totalReturns = strState[6]
         totaleth = totalReturns /1e6
+        #print(totalReturns)
         #print(f'Real Profit: {profit:.5f}')
         difff= profit-totaleth
         #print(f'Diff: {difff}')
 
-        blocks_per_year = 2_252_857
+        blocks_per_year = 2102400 #same as cream and compound
         assert startingBalance != 0
         time =(i+1)*waitBlock
         assert time != 0
         apr = (totalReturns/startingBalance) * (blocks_per_year / time)
         assert apr > 0 and apr < 1
+        ppsProfit = (ppsAfter-ppsBefore) / ppsBefore/waitBlock*blocks_per_year
         #print(apr)
-        print(f'implied apr: {apr:.8%}')
+        print(f'APR: {apr:.8%}')
+        print(f'APR after fees: {ppsProfit:.8%}')
 
     vault.withdraw(vault.balanceOf(whale), {"from": whale})
 

@@ -24,7 +24,7 @@ contract AlphaHomo is GenericLenderBase {
     using Address for address;
     using SafeMath for uint256;
 
-    uint256 private constant secondsPerBlock = 12;
+    uint256 private constant secondsPerBlock = 15;
     address public constant weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
     address public constant bank = address(0x67B66C99D3Eb37Fa76Aa3Ed1ff33E8e39F0b9c7A);
 

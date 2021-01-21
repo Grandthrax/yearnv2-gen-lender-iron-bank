@@ -11,13 +11,15 @@ def genericStateOfStrat(strategy, currency, vault):
     strState = vault.strategies(strategy)
     totalDebt = strState[5]/  (10 ** decimals)
     debtLimit = strState[2]/  (10 ** decimals)
+    totalLosses = strState[7]/  (10 ** decimals)
     esassets =strategy.estimatedTotalAssets()+1
 
     totalReturns = strState[6]/  (10 ** decimals)
     print(f"Total Strategy Debt: {totalDebt:.5f}")
     print(f"Strategy Debt Limit: {debtLimit:.5f}")
     print(f"Total Strategy Returns: {totalReturns:.5f}")
-    blocksPerYear = 2628333
+    print(f"Total Strategy losses: {totalLosses}")
+    blocksPerYear = 2102400
     ironapr = strategy.ironBankBorrowRate(0, True)*blocksPerYear/1e18
 
     apr= strategy.currentSupplyRate()*blocksPerYear/1e18

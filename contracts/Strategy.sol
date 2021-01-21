@@ -44,7 +44,7 @@ contract Strategy is BaseStrategy {
     address public constant uniswapRouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
     address public constant weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
-    uint256 public constant BLOCKSPERYEAR = 2628333; // 12 seconds per block
+    uint256 public constant BLOCKSPERYEAR = 2102400; // 12 seconds per block
 
     //IRON BANK
     ComptrollerI private ironBank = ComptrollerI(address(0xAB1c342C7bf5Ec5F02ADEA1c2270670bCa144CbB));
@@ -519,7 +519,6 @@ contract Strategy is BaseStrategy {
                 //withdraw what we can withdraw
                 _withdrawSome(amountToFree.sub(looseAssets));
                 uint256 newLoose = want.balanceOf(address(this));
-
                 //if we dont have enough money adjust _debtOutstanding and only change profit if needed
                 if (newLoose < amountToFree) {
                     if (_profit > newLoose) {
@@ -530,6 +529,7 @@ contract Strategy is BaseStrategy {
                     }
                 }
             }
+
         } else {
 
             //serious loss should never happen but if it does lets record it accurately
@@ -665,7 +665,6 @@ contract Strategy is BaseStrategy {
                 }
             }
             if (!lenders[lowest].hasAssets()) {
-
                 return amountWithdrawn;
             }
             amountWithdrawn += lenders[lowest].withdraw(_amount - amountWithdrawn);
